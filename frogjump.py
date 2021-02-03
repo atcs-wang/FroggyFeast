@@ -13,8 +13,9 @@ CHARACTER_SCALING = 1
 TILE_SCALING = 0.5
 
 # Movement speed of player, in pixels per frame
-PLAYER_MOVEMENT_SPEED = 5
-GRAVITY =1
+SCROLL_SPEED = 5
+# PLAYER_MOVE_SPEED = 5
+GRAVITY = 1
 PLAYER_JUMP_SPEED = 20
 
 class PlayerCharacter(arcade.Sprite):
@@ -79,11 +80,11 @@ class MyGame(arcade.Window):
         """ Set up the game here. Call this function to restart the game. """
         # Create the Sprite lists
         self.player_list = arcade.SpriteList()
-        self.wall_list = arcade.SpriteList(use_spatial_hash=True)
-        self.coin_list = arcade.SpriteList(use_spatial_hash=True)
+        self.ground_list = arcade.SpriteList()
+        self.bug_list = arcade.SpriteList()
 
         self.player_sprite = PlayerCharacter()
-        self.player_sprite.left = 0
+        self.player_sprite.left = 128
         self.player_sprite.bottom = 128
         self.player_list.append(self.player_sprite)
 
@@ -91,15 +92,15 @@ class MyGame(arcade.Window):
         # Create the ground
         # This shows using a loop to place multiple sprites horizontally
         for x in range(0, 1250, 64):
-            wall = arcade.Sprite(":resources:images/tiles/grassMid.png", TILE_SCALING)
-            wall.center_x = x
-            wall.center_y = 32
-            self.wall_list.append(wall)
+            ground = arcade.Sprite(":resources:images/tiles/grassMid.png", TILE_SCALING)
+            ground.center_x = x
+            ground.center_y = 32
+            self.ground_list.append(ground)
 
 
         # Create the 'physics engine'
         self.physics_engine = arcade.PhysicsEnginePlatformer(self.player_sprite,
-                                                             self.wall_list,
+                                                             self.ground_list,
                                                              GRAVITY)
 
 
@@ -111,8 +112,7 @@ class MyGame(arcade.Window):
 
         
         # Draw our sprites
-        self.wall_list.draw()
-        self.coin_list.draw()
+        self.ground_list.draw()
         self.player_list.draw()
 
 
@@ -126,7 +126,11 @@ class MyGame(arcade.Window):
         if self.physics_engine.can_jump():
             arcade.play_sound(self.jump_sound)
             self.player_sprite.change_y = PLAYER_JUMP_SPEED
-            self.player_sprite.change_x = PLAYER_MOVEMENT_SPEED
+            # self.player_sprite.change_x = PLAYER_MOVE_SPEED
+
+            for ground in self.ground_list:
+                ground.change_x = - SCROLL_SPEED
+
             self.player_sprite.jumping = True
 
 
@@ -138,11 +142,18 @@ class MyGame(arcade.Window):
 
         # If was jumping but now landed, stop moving
         if self.player_sprite.jumping and self.physics_engine.can_jump():
-            self.player_sprite.change_x = 0
+            # self.player_sprite.change_x = 0
+            for ground in self.ground_list:
+                ground.change_x = 0
             self.player_sprite.jumping = False
 
-        self.player_list.update_animation(delta_time)
 
+        # Wrap the grounds (ground) around
+        for ground in self.ground_list:
+            if ground.right < 0:
+                ground.left += SCREEN_WIDTH + ground.width
+
+        self.player_list.update_animation(delta_time)
 def main():
     """ Main method """
     window = MyGame()
