@@ -3,6 +3,7 @@ Frog Jump Game
 """
 import arcade
 import random
+import math
 
 # Constants
 SCREEN_WIDTH = 1000
@@ -19,9 +20,10 @@ SCROLL_SPEED = 5
 GRAVITY = 1
 PLAYER_JUMP_SPEED = 20
 
-MIN_BUG_INTERVAL, MAX_BUG_INTERVAL = 3, 8
+MIN_BUG_INTERVAL, MAX_BUG_INTERVAL = 2, 6
 BUG_HEIGHT_RANGE = 128 * 2
-BUG_SPEED = 4
+BUG_SPEED = 6
+BUG_SPIN_AWAY_SPEED = 10
 
 class PlayerCharacter(arcade.Sprite):
     """ Player Sprite"""
@@ -55,6 +57,44 @@ class PlayerCharacter(arcade.Sprite):
             self.texture = self.idle_texture
 
 
+class BugSprite(arcade.Sprite):
+
+    """Bug Sprite"""
+    def __init__(self, texture : arcade.Texture, value : int):
+
+        # Set up parent class
+        super().__init__()
+
+        # Set the initial texture and value provided
+        self.texture = texture
+        self.value = value
+
+        self.set_hit_box(self.texture.hit_box_points)
+
+        # Position offscreen to the right
+        self.left = SCREEN_WIDTH
+        self.bottom = 64 + random.randrange(BUG_HEIGHT_RANGE)
+        self.change_x = - BUG_SPEED
+
+        # Track our state
+        self.alive = True
+
+
+    def kill_and_spin_away(self):
+        self.alive = False
+        self.change_angle = random.randint(3,5) * random.choice((-1,1))
+        flight_angle = math.radians(random.randint(20,70))
+        self.change_x = math.cos(flight_angle) * BUG_SPIN_AWAY_SPEED
+        self.change_y = math.sin(flight_angle) * BUG_SPIN_AWAY_SPEED
+
+class FlySprite(BugSprite):
+
+    fly_texture = arcade.load_texture(":resources:images/enemies/fly.png")
+
+    def __init__(self):
+        super().__init__(texture = FlySprite.fly_texture, value = 1)
+
+
 class MyGame(arcade.Window):
     """
     Main application class.
@@ -68,6 +108,7 @@ class MyGame(arcade.Window):
         # These are 'lists' that keep track of our sprites. Each sprite should
         # go into a list.
         self.bug_list : arcade.SpriteList  = None
+        self.dead_bug_list : arcade.SpriteList = None
         self.ground_list : arcade.SpriteList = None
         self.player_list : arcade.SpriteList = None
 
@@ -82,6 +123,7 @@ class MyGame(arcade.Window):
 
         # Timer for next bug
         self.time_until_next_bug = 0
+        self.score = 0
 
         arcade.set_background_color(arcade.csscolor.CORNFLOWER_BLUE)
 
@@ -91,12 +133,12 @@ class MyGame(arcade.Window):
         self.player_list = arcade.SpriteList()
         self.ground_list = arcade.SpriteList()
         self.bug_list = arcade.SpriteList()
+        self.dead_bug_list = arcade.SpriteList()
 
         self.player_sprite = PlayerCharacter()
         self.player_sprite.left = 128
         self.player_sprite.bottom = 128
         self.player_list.append(self.player_sprite)
-
 
         # Create the ground
         # This shows using a loop to place multiple sprites horizontally
@@ -106,6 +148,8 @@ class MyGame(arcade.Window):
             ground.center_y = 32
             self.ground_list.append(ground)
 
+
+        self.score = 0
 
         # Create the 'physics engine'
         self.physics_engine = arcade.PhysicsEnginePlatformer(self.player_sprite,
@@ -121,7 +165,12 @@ class MyGame(arcade.Window):
         self.ground_list.draw()
         self.player_list.draw()
         self.bug_list.draw()
+        self.dead_bug_list.draw()
 
+        # Draw our score on the screen, scrolling it with the viewport
+        score_text = f"Score: {self.score}"
+        arcade.draw_text(score_text, 10 , 10 ,
+                         arcade.csscolor.WHITE, 18)
 
     def on_key_press(self, key, modifiers):
         """Called whenever a key is pressed. """
@@ -138,8 +187,6 @@ class MyGame(arcade.Window):
             for ground in self.ground_list:
                 ground.change_x = - SCROLL_SPEED
 
-            for bug in self.bug_list:
-                bug.change_x = - BUG_SPEED - SCROLL_SPEED 
             self.player_sprite.jumping = True
 
 
@@ -154,8 +201,7 @@ class MyGame(arcade.Window):
             # self.player_sprite.change_x = 0
             for ground in self.ground_list:
                 ground.change_x = 0
-            for bug in self.bug_list:
-                bug.change_x = - BUG_SPEED
+
             self.player_sprite.jumping = False
 
 
@@ -164,25 +210,45 @@ class MyGame(arcade.Window):
             if ground.right < 0:
                 ground.left += SCREEN_WIDTH + ground.width
         
+
+
+        # Move bugs, adjust for frog motion
+        if self.player_sprite.jumping:
+            for bug in self.bug_list:
+                bug.change_x -= SCROLL_SPEED 
+            for bug in self.dead_bug_list:
+                bug.change_x -= SCROLL_SPEED 
+        self.bug_list.update()
+        self.dead_bug_list.update()
+
+        if self.player_sprite.jumping:
+            for bug in self.bug_list:
+                bug.change_x += SCROLL_SPEED 
+            for bug in self.dead_bug_list:
+                bug.change_x += SCROLL_SPEED 
+
+        # Remove if offscreen
         for bug in self.bug_list:
             if bug.right < 0:
                 bug.remove_from_sprite_lists()
+        for bug in self.dead_bug_list:
+            if bug.left > SCREEN_WIDTH or bug.bottom > SCREEN_HEIGHT:
+                bug.remove_from_sprite_lists()
 
-        # Manage bugs
-
-        # Move bugs, check collisions
-        self.bug_list.update()
+        # COLLISION CHECKS
         for bug in arcade.check_for_collision_with_list(self.player_sprite, self.bug_list):
             arcade.play_sound(self.hit_sound)
+            self.score += bug.value
+
             bug.remove_from_sprite_lists()
+            self.dead_bug_list.append(bug)
+            bug.kill_and_spin_away()
+
 
         # Manage bug timer, create bugs and reset timer if time:
         self.time_until_next_bug -= delta_time
         if self.time_until_next_bug <= 0 :
-            bug = arcade.Sprite(":resources:images/enemies/fly.png")
-            bug.left = SCREEN_WIDTH
-            bug.bottom = 64 + random.randrange(BUG_HEIGHT_RANGE)
-            bug.change_x = - BUG_SPEED
+            bug = FlySprite()
             self.bug_list.append(bug)
             self.time_until_next_bug = random.randrange(MIN_BUG_INTERVAL, MAX_BUG_INTERVAL)
 
