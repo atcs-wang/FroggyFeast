@@ -2,6 +2,7 @@
 Frog Jump Game
 """
 import arcade
+import random
 
 # Constants
 SCREEN_WIDTH = 1000
@@ -17,6 +18,10 @@ SCROLL_SPEED = 5
 # PLAYER_MOVE_SPEED = 5
 GRAVITY = 1
 PLAYER_JUMP_SPEED = 20
+
+MIN_BUG_INTERVAL, MAX_BUG_INTERVAL = 3, 8
+BUG_HEIGHT_RANGE = 128 * 2
+BUG_SPEED = 4
 
 class PlayerCharacter(arcade.Sprite):
     """ Player Sprite"""
@@ -73,6 +78,10 @@ class MyGame(arcade.Window):
         self.physics_engine : arcade.PhysicsEnginePlatformer = None
 
         self.jump_sound = arcade.load_sound(":resources:sounds/jump1.wav")
+        self.hit_sound = arcade.load_sound(":resources:sounds/hit1.wav")
+
+        # Timer for next bug
+        self.time_until_next_bug = 0
 
         arcade.set_background_color(arcade.csscolor.CORNFLOWER_BLUE)
 
@@ -103,17 +112,15 @@ class MyGame(arcade.Window):
                                                              self.ground_list,
                                                              GRAVITY)
 
-
     def on_draw(self):
         """ Render the screen. """
 
         arcade.start_render()
-        # Code to draw the screen goes here
-
         
         # Draw our sprites
         self.ground_list.draw()
         self.player_list.draw()
+        self.bug_list.draw()
 
 
     def on_key_press(self, key, modifiers):
@@ -131,6 +138,8 @@ class MyGame(arcade.Window):
             for ground in self.ground_list:
                 ground.change_x = - SCROLL_SPEED
 
+            for bug in self.bug_list:
+                bug.change_x = - BUG_SPEED - SCROLL_SPEED 
             self.player_sprite.jumping = True
 
 
@@ -145,6 +154,8 @@ class MyGame(arcade.Window):
             # self.player_sprite.change_x = 0
             for ground in self.ground_list:
                 ground.change_x = 0
+            for bug in self.bug_list:
+                bug.change_x = - BUG_SPEED
             self.player_sprite.jumping = False
 
 
@@ -152,8 +163,31 @@ class MyGame(arcade.Window):
         for ground in self.ground_list:
             if ground.right < 0:
                 ground.left += SCREEN_WIDTH + ground.width
+        
+        for bug in self.bug_list:
+            if bug.right < 0:
+                bug.remove_from_sprite_lists()
+
+        # Manage bugs
+
+        # Move bugs, check collisions
+        self.bug_list.update()
+        for bug in arcade.check_for_collision_with_list(self.player_sprite, self.bug_list):
+            arcade.play_sound(self.hit_sound)
+            bug.remove_from_sprite_lists()
+
+        # Manage bug timer, create bugs and reset timer if time:
+        self.time_until_next_bug -= delta_time
+        if self.time_until_next_bug <= 0 :
+            bug = arcade.Sprite(":resources:images/enemies/fly.png")
+            bug.left = SCREEN_WIDTH
+            bug.bottom = 64 + random.randrange(BUG_HEIGHT_RANGE)
+            bug.change_x = - BUG_SPEED
+            self.bug_list.append(bug)
+            self.time_until_next_bug = random.randrange(MIN_BUG_INTERVAL, MAX_BUG_INTERVAL)
 
         self.player_list.update_animation(delta_time)
+
 def main():
     """ Main method """
     window = MyGame()
