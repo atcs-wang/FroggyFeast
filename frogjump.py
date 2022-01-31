@@ -23,7 +23,9 @@ PLAYER_JUMP_SPEED = 20
 MIN_BUG_INTERVAL, MAX_BUG_INTERVAL = 2, 6
 BUG_HEIGHT_RANGE = 128 * 2
 BUG_SPEED = 6
-BUG_SPIN_AWAY_SPEED = 10
+BUG_SPIN_AWAY_SPEED = 15
+
+BACKGROUND_INTERVAL = 520
 
 class PlayerCharacter(arcade.Sprite):
     """ Player Sprite"""
@@ -56,7 +58,19 @@ class PlayerCharacter(arcade.Sprite):
         else :
             self.texture = self.idle_texture
 
+class BackgroundSprite(arcade.Sprite):
+    
+    textures = [(arcade.load_texture(":resources:images/tiles/grass_sprout.png"), .5, 0.0),
+                (arcade.load_texture(":resources:images/tiles/mushroomRed.png"), .5, 0.0),
+                (arcade.load_texture(":resources:images/tiles/rock.png"), .5, 0.0),
+                (arcade.load_texture(":resources:images/tiles/bush.png"), 1, 0.0)]
+                
 
+    def __init__(self):
+
+        super().__init__()
+        self.texture, self.scale,__ = random.choice(BackgroundSprite.textures)
+        
 class BugSprite(arcade.Sprite):
 
     """Bug Sprite"""
@@ -110,6 +124,7 @@ class MyGame(arcade.Window):
         self.bug_list : arcade.SpriteList  = None
         self.dead_bug_list : arcade.SpriteList = None
         self.ground_list : arcade.SpriteList = None
+        self.background_list : arcade.SpriteList = None
         self.player_list : arcade.SpriteList = None
 
         # Separate variable that holds the player sprite
@@ -132,6 +147,7 @@ class MyGame(arcade.Window):
         # Create the Sprite lists
         self.player_list = arcade.SpriteList()
         self.ground_list = arcade.SpriteList()
+        self.background_list = arcade.SpriteList()
         self.bug_list = arcade.SpriteList()
         self.dead_bug_list = arcade.SpriteList()
 
@@ -142,11 +158,18 @@ class MyGame(arcade.Window):
 
         # Create the ground
         # This shows using a loop to place multiple sprites horizontally
-        for x in range(0, 1250, 64):
+        for x in range(0, SCREEN_WIDTH + 64, 64):
             ground = arcade.Sprite(":resources:images/tiles/grassMid.png", TILE_SCALING)
-            ground.center_x = x
-            ground.center_y = 32
+            ground.left = x
+            ground.bottom = 0
             self.ground_list.append(ground)
+
+        for i in range(3):
+            bg_item = BackgroundSprite()
+            bg_item.left = random.randint(0, SCREEN_WIDTH - bg_item.width)
+            bg_item.bottom = 64
+            self.background_list.append(bg_item)
+            print(bg_item.position)
 
 
         self.score = 0
@@ -162,10 +185,11 @@ class MyGame(arcade.Window):
         arcade.start_render()
         
         # Draw our sprites
+        self.background_list.draw()
         self.ground_list.draw()
         self.player_list.draw()
-        self.bug_list.draw()
         self.dead_bug_list.draw()
+        self.bug_list.draw()
 
         # Draw our score on the screen, scrolling it with the viewport
         score_text = f"Score: {self.score}"
@@ -186,7 +210,8 @@ class MyGame(arcade.Window):
 
             for ground in self.ground_list:
                 ground.change_x = - SCROLL_SPEED
-
+            for bg in self.background_list:
+                bg.change_x = - SCROLL_SPEED
             self.player_sprite.jumping = True
 
 
@@ -195,12 +220,15 @@ class MyGame(arcade.Window):
 
         # Move the player with the physics engine
         self.physics_engine.update()
+        self.background_list.update()
 
         # If was jumping but now landed, stop moving
         if self.player_sprite.jumping and self.physics_engine.can_jump():
             # self.player_sprite.change_x = 0
             for ground in self.ground_list:
                 ground.change_x = 0
+            for bg in self.background_list:
+                bg.change_x = 0
 
             self.player_sprite.jumping = False
 
@@ -210,7 +238,17 @@ class MyGame(arcade.Window):
             if ground.right < 0:
                 ground.left += SCREEN_WIDTH + ground.width
         
-
+        # "wrap" the backgrounds (ground) around
+        new_bgs = []
+        for bg in self.background_list:
+            if bg.right < 0:
+                bg.remove_from_sprite_lists()
+                bg = BackgroundSprite()
+                bg.left = random.randint(SCREEN_WIDTH, SCREEN_WIDTH + BACKGROUND_INTERVAL)
+                bg.bottom = 64
+                new_bgs.append(bg)
+        
+        self.background_list.extend(new_bgs)
 
         # Move bugs, adjust for frog motion
         if self.player_sprite.jumping:

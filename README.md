@@ -1,0 +1,1 @@
+Simple game with Python's arcade library.
